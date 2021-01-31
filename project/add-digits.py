@@ -11,13 +11,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #loading data
 X = np.load('../Data/data0.npy')
 y = np.load('../Data/lab0.npy')
-#print(y.shape)
-#for i in [1, 2]: 
-#    Xt = np.load('../Data/data' + str(i) +  '.npy')
-#    yt = np.load('../Data/lab' + str(i) +'.npy')
-#    X = np.concatenate((X, Xt))
-#    y = np.concatenate((y, yt))
-
+for i in [1, 2]:
+    Xt = np.load('../Data/data' + str(i) + '.npy')
+    yt = np.load('../Data/lab' + str(i) + '.npy')
+    X = np.concatenate((X, Xt))
+    y = np.concatenate((y, yt))
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print("split done")
@@ -45,48 +43,46 @@ class DigitAdditionDataset(Dataset):
 
 traindataset = DigitAdditionDataset(X_train, y_train)
 valdataset = DigitAdditionDataset(X_test, y_test)
+valoader = DataLoader(dataset=valdataset, batch_size=batch_size, shuffle=True, num_workers=1)
 trainloader = DataLoader(dataset=traindataset, batch_size=batch_size, shuffle=True, num_workers=1)
+
 print("dataloader made")
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.layer0 = nn.Sequential(
             nn.Conv2d(1, 8, kernel_size=5, stride=1, padding=2),
-            #nn.BatchNorm2d(8),
             nn.ReLU()
             )
         self.layer01 = nn.Sequential(
             nn.Conv2d(8, 16, kernel_size=5, stride=1, padding=2),
-            #nn.BatchNorm2d(16),
             nn.ReLU()
             )
         
         self.layer1 = nn.Sequential(
             nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2),
-            #nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
         # (16, 40 , 168) -> (32, 40, 84)
         self.layer2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
-            #nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
         # (32, 40, 84) -> (64, 40, 42)
         self.layer3 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=(4,3)),
-            #nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         # (64, 40, 42) -> (64, 44, 44) -> (64, 22, 22)
         self.layer4 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-            #nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         # (64, 22, 22) -> (64, 11, 11)
         self.fc1 = nn.Linear(64*11*11, 2000)
-        self.fc2 = nn.Linear(2000, 50)
+        self.drop1 = nn.Dropout(p=0.5)
+        self.fc2 = nn.Linear(2000, 37)
 
     def forward(self, x):
         out = self.layer0(x)
@@ -98,6 +94,7 @@ class Net(nn.Module):
         out = out.reshape(out.size(0), -1)
 
         out = F.relu(self.fc1(out))
+        out = self.drop1(out)
         out = self.fc2(out)
         return out
 
@@ -105,10 +102,9 @@ class Net(nn.Module):
 
 # In[153]:
 
-
 model = Net()
 model= nn.DataParallel(model)
-model = model.to(device)
+model = model.cuda()
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -116,77 +112,88 @@ print("model made")
 
 # In[154]:
 
-
 # Train the model
-def train_model(model, trainloader, valdataset, num_epochs=100, saveweights=True, loadweights=False, weightsfile=None):
+def train_model(model, trainloader, valoader, num_epochs=100, saveweights=True, eval_pass=False, weightsfile="./trained_model"):
     print("starting train")
+    torch.cuda.empty_cache()
+    if eval_pass:
+        num_epochs = 1
+
     total_step = len(trainloader)
     train_loss_list = []
     train_acc_list = []
     val_acc_list = []
     val_loss_list = []
+
     for epoch in range(num_epochs):
-        for i, (images, label) in enumerate(trainloader):
-            model.train()
+        if not eval_pass:
+            for i, (images, label) in enumerate(trainloader):
+                model.train()
+                # Run the forward pass
+                images = images.cuda()
+                label = label.cuda()
+                outputs = model(images)
+                #print("OUTPUT DEVICE", outputs.device, label.device)
+                loss = criterion(outputs, label)
+                #train_loss_list.append(loss.item())
+
+                # Backprop and perform Adam optimisation
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                # Track the accuracy
+                total = label.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                correct = (predicted == label).sum().item()
+                del label
+                del images
+                #train_acc_list.append(correct / total)
+
+                
+            print('Training: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+                          .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
+                              (correct / total) * 100))
+            train_acc_list.append(correct / total)
+            train_loss_list.append(loss.item())
+
+        torch.cuda.empty_cache()
+       
+        for images, label in valoader:
+            model.eval()
             # Run the forward pass
-            images = images.to(device)
-            label = label.to(device)
+            images = images.cuda()
+            label = label.cuda()
             outputs = model(images)
             #print("OUTPUT DEVICE", outputs.device, label.device)
             loss = criterion(outputs, label)
-            #train_loss_list.append(loss.item())
 
-            # Backprop and perform Adam optimisation
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
             # Track the accuracy
             total = label.size(0)
             _, predicted = torch.max(outputs.data, 1)
             correct = (predicted == label).sum().item()
-            #train_acc_list.append(correct / total)
-
-            
-        print('Training: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
-                      .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
-                          (correct / total) * 100))
-        train_acc_list.append(correct / total)
-        train_loss_list.append(loss.item())
-
-        model.eval()
-        # Run the forward pass
-        images, label = valdataset.x, valdataset.y
-        images = images.to(device)
-        label = label.to(device)
-        outputs = model(images)
-        #print("OUTPUT DEVICE", outputs.device, label.device)
-        loss = criterion(outputs, label)
+        val_acc_list.append(correct / total) 
         val_loss_list.append(loss.item())
-
-        # Track the accuracy
-        total = label.size(0)
-        _, predicted = torch.max(outputs.data, 1)
-        correct = (predicted == label).sum().item()
-        val_acc_list.append(correct / total)
-
         print('Validation: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
                       (correct / total) * 100))
-        if saveweights:
-           torch.save(model, 'trained_model')
+    if saveweights:
+        torch.save(model.state_dict(), './trained_model')
         
     plt.title("Curve:Loss") 
     plt.plot(range(len(train_loss_list)), train_loss_list, label="Train") 
     plt.plot(range(len(train_loss_list)), val_loss_list, label="Validation") 
     plt.xlabel("Iterations") 
     plt.ylabel("Loss")
-    plt.savefig('Loss_curve.png')
+    plt.legend()
+    plt.savefig('loss_curve.png')
+    plt.close()
     plt.title("Curve:Accuracy") 
     plt.plot(range(len(train_loss_list)), train_acc_list, label="Train") 
     plt.plot(range(len(train_loss_list)), val_acc_list, label="Validation") 
     plt.xlabel("Iterations") 
     plt.ylabel("Loss")
+    plt.legend()
     plt.savefig('acc_curve.png')
 
-train_model(model, trainloader, valdataset, 100) 
+train_model(model, trainloader, valoader, 100) 
