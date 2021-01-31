@@ -1,14 +1,3 @@
-# -*- coding: utf-8 -*-
-
-# Rapid prototyping notebook
-
-
-# Commented out IPython magic to ensure Python compatibility.
-# %%capture
-# ! pip install pytorch-lightning
-# ! pip install pytorch-lightning-bolts
-
-import pytorch_lightning as pl
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,207 +5,263 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 import torch.nn as nn
 import torch.nn.functional as F
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import sys
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+r = 1
+#loading data
+#X = np.load('../Data/data0.npy')
+#y = np.load('../Data/lab0.npy')
+#for i in [1, 4]:
+#    Xt = np.load('../Data/data' + str(i) + '.npy')[:10000]
+#    yt = np.load('../Data/lab' + str(i) + '.npy')[:10000]
+#    X = np.concatenate((X, Xt))
+#    y = np.concatenate((y, yt))
+#Xt = np.load('../Data/data2.npy')[:6000]
+#yt = np.load('../Data/lab2.npy')[:6000]
+#X = np.concatenate((X, Xt))
+#y = np.concatenate((y, yt))
+
+
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+#print("split done")
+## Padding to make it square
+#tp = ((0, 0), (64, 64), (0, 0))
+#X_train = np.pad(X_train, pad_width=tp, mode='constant', constant_values=0)
+#X_train = torch.Tensor([[i] for i in X_train])
+#X_test = np.pad(X_test, pad_width=tp, mode='constant', constant_values=0)
+#X_test = torch.Tensor([[i] for i in X_test])
+batch_size = 300
+
+print("Converted to tensor")
 
 class DigitAdditionDataset(Dataset):
-  def __init__(self, X, y):
-    self.x = X
-    self.n_samples = X.shape[0]
-    self.y = torch.Tensor(y).long()
+    def __init__(self, X, y):
+        self.x = X
+        self.n_samples = X.shape[0]
+        self.y = torch.Tensor(y).long()
+        
+    def __getitem__(self, index):
+        return self.x[index], self.y[index]
+    
+    def __len__(self):
+        return self.n_samples
 
-  def __getitem__(self, index):
-    return self.x[index], self.y[index]
+#traindataset = DigitAdditionDataset(X_train, y_train)
+#valdataset = DigitAdditionDataset(X_test, y_test)
+#valoader = DataLoader(dataset=valdataset, batch_size=batch_size, shuffle=True, num_workers=1)
+#trainloader = DataLoader(dataset=traindataset, batch_size=batch_size, shuffle=True, num_workers=1)
 
-  def __len__(self):
-    return self.n_samples
+#print("dataloader made")
 
+class Net(nn.Module):
 
-class Data(pl.LightningDataModule):
-  def __init__(self, train_data, val_data, batch_size=300):
-    super().__init__()
-    self.batch_size = batch_size
-    self.train_data = train_data
-    self.val_data = val_data
+    def __init__(self):
+        super(Net, self).__init__()
+        self.layerR1 = nn.Sequential(
+            nn.Conv2d(1, 48, kernel_size=5, stride=1, padding=2),
+            nn.ReLU())
 
-  def setup(self, stage=None):
-    self.train_data = traindataset
-    self.val_data = valdataset
-    pass
+        #self.layerR2 = nn.Sequential(
+        #    nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+        #    nn.ReLU() 
+        #    )
 
-  def train_dataloader(self):
-    return DataLoader(dataset=self.train_data, batch_size=batch_size, shuffle=True, num_workers=40)
+        #self.layerR3 = nn.Sequential(
+        #    nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
+        #    nn.ReLU() 
+        #    )
 
-  def val_dataloader(self):
-    return DataLoader(dataset=self.val_data, batch_size=batch_size, num_workers=40)
+        # (32, 40 , 168) -> (4, 40, 84)
+        self.layerR4 = nn.Sequential(
+            nn.Conv2d(48, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
+        # (4, 40, 84) -> (48, 40, 42)
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
-"""---
+        # (48, 40, 42) -> (128, 22, 22)
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=5, stride=1, padding=(4,3)),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))
 
-## Model
-"""
+        # (128, 22, 22) -> (192, 11, 11)
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(128, 192, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))
+        # (192, 11, 11) -> (192, 12, 12)
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(192, 192, kernel_size=4, stride=1, padding=2),
+            nn.ReLU())
+        # (192, 12, 12) -> (128, 6, 6)
+        self.layer5 = nn.Sequential(
+            nn.Conv2d(192, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(), 
+            nn.MaxPool2d(kernel_size=2, stride=2))
+            
 
+        #self.fc1 = nn.Linear(64*6*6, 64*6*6)
+        #self.drop1 = nn.Dropout(p=0.5)
+        self.fc2 = nn.Linear(128*6*6, 2000)
+        self.drop2 = nn.Dropout(p=0.5)
+        self.fc3 = nn.Linear(2000, 37)
+        #self.res1 = nn.Linear(2000, 10)
+        #self.res2 = nn.Linear(2000, 10)
+        #self.res3 = nn.Linear(2000, 10)
+        #self.res4 = nn.Linear(2000, 10)
+        ## (10, 1, 4) -> (50, 1, 1)
+        #self.lconv = nn.Conv2d(10, 50, kernel_size=(4,1),stride=1,padding=0)
 
-class Lulz(pl.LightningModule):
+    def forward(self, x):
+        out = self.layerR1(x)
+        #out = self.layerR2(out)
+        #out = self.layerR3(out)
+        out = self.layerR4(out)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.layer5(out)
+        out = out.reshape(out.size(0), -1)
+        #print(out.shape) 
+        #out = F.relu(self.fc1(out))
+        #print(out.shape)
+        #out = self.drop1(out)
+        out = F.relu(self.fc2(out))
+        out = self.drop2(out)
+        out = self.fc3(out)
+        return out
+        
+ 
+# In[153]:
 
-  def __init__(self):
-    self.ep_num = 0
-    super().__init__()
-    self.criterion = nn.CrossEntropyLoss()
-    self.layerR1 = nn.Sequential(
-        nn.Conv2d(1, 48, kernel_size=5, stride=1, padding=2),
-        nn.ReLU())
+model = Net()
+model= nn.DataParallel(model)
+model = model.cuda()
+# Loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+print("model made")
 
-    #self.layerR2 = nn.Sequential(
-    #    nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
-    #    nn.ReLU()
-    #    )
+# In[154]:
 
-    #self.layerR3 = nn.Sequential(
-    #    nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-    #    nn.ReLU()
-    #    )
+# Train the model
+def train_model(model, trainloader, valoader, num_epochs, criterion, optimizer, saveweights=True, eval_pass=False, weightsfile="./trained_model"):
+    print("starting train")
+    torch.cuda.empty_cache()
+    if eval_pass:
+        num_epochs = 1
 
-    # (32, 40 , 168) -> (4, 40, 84)
-    self.layerR4 = nn.Sequential(
-        nn.Conv2d(48, 64, kernel_size=5, stride=1, padding=2),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2)))
+    total_step = len(trainloader)
+    train_loss_list = []
+    train_acc_list = []
+    val_acc_list = []
+    val_loss_list = []
 
-    # (4, 40, 84) -> (48, 40, 42)
-    self.layer1 = nn.Sequential(
-        nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2)))
+    for epoch in range(num_epochs):
+        if not eval_pass:
+            for i, (images, label) in enumerate(trainloader):
+                model.train()
+                # Run the forward pass
+                images = images.cuda()
+                label = label.cuda()
+                outputs = model(images)
+                #print("OUTPUT DEVICE", outputs.device, label.device)
+                loss = criterion(outputs, label)
+                #train_loss_list.append(loss.item())
 
-    # (48, 40, 42) -> (128, 22, 22)
-    self.layer2 = nn.Sequential(
-        nn.Conv2d(64, 128, kernel_size=5, stride=1, padding=(4, 3)),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=2, stride=2))
+                # Backprop and perform Adam optimisation
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                # Track the accuracy
+                total = label.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                correct = (predicted == label).sum().item()
+                del label
+                del images
+                #train_acc_list.append(correct / total)
 
-    # (128, 22, 22) -> (192, 11, 11)
-    self.layer3 = nn.Sequential(
-        nn.Conv2d(128, 192, kernel_size=5, stride=1, padding=2),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=2, stride=2))
-    # (192, 11, 11) -> (192, 12, 12)
-    self.layer4 = nn.Sequential(
-        nn.Conv2d(192, 192, kernel_size=4, stride=1, padding=2),
-        nn.ReLU())
-    # (192, 12, 12) -> (128, 6, 6)
-    self.layer5 = nn.Sequential(
-        nn.Conv2d(192, 128, kernel_size=3, stride=1, padding=1),
-        nn.ReLU(),
-        nn.MaxPool2d(kernel_size=2, stride=2))
+                
+            print('Training: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+                          .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
+                              (correct / total) * 100))
+            train_acc_list.append(correct / total)
+            train_loss_list.append(loss.item())
 
-    self.fc1 = nn.Linear(128 * 6 * 6, 128 * 6 * 6)
-    self.drop1 = nn.Dropout(p=0.5)
-    self.fc2 = nn.Linear(128 * 6 * 6, 2000)
-    self.drop2 = nn.Dropout(p=0.5)
-    self.fc3 = nn.Linear(2000, 37)
-    #self.res1 = nn.Linear(2000, 10)
-    #self.res2 = nn.Linear(2000, 10)
-    #self.res3 = nn.Linear(2000, 10)
-    #self.res4 = nn.Linear(2000, 10)
-    ## (10, 1, 4) -> (50, 1, 1)
-    #self.lconv = nn.Conv2d(10, 50, kernel_size=(4,1),stride=1,padding=0)
+        torch.cuda.empty_cache()
+       
+        for images, label in valoader:
+            model.eval()
+            # Run the forward pass
+            images = images.cuda()
+            label = label.cuda()
+            outputs = model(images)
+            #print("OUTPUT DEVICE", outputs.device, label.device)
+            loss = criterion(outputs, label)
 
-  def forward(self, x):
-    out = self.layerR1(x)
-    #out = self.layerR2(out)
-    #out = self.layerR3(out)
-    out = self.layerR4(out)
-    out = self.layer1(out)
-    out = self.layer2(out)
-    out = self.layer3(out)
-    out = self.layer4(out)
-    out = self.layer5(out)
-    out = out.reshape(out.size(0), -1)
-    #print(out.shape)
-    out = F.relu(self.fc1(out))
-    #print(out.shape)
-    out = self.drop1(out)
-    out = F.relu(self.fc2(out))
-    out = self.fc3(out)
-    return out
+            # Track the accuracy
+            total = label.size(0)
+            _, predicted = torch.max(outputs.data, 1)
+            correct = (predicted == label).sum().item()
+        val_acc_list.append(correct / total) 
+        val_loss_list.append(loss.item())
+        if epoch % 30 == 0:
+            torch.save(model.state_dict(), 'output/model' + str(r) + str(epoch))
+        print('Validation: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
+                  .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
+                      (correct / total) * 100))
+    if saveweights:
+        torch.save(model.state_dict(), './trained_model')
+        
+    plt.title("Curve:Loss") 
+    plt.plot(range(len(train_loss_list)), train_loss_list, label="Train") 
+    plt.plot(range(len(train_loss_list)), val_loss_list, label="Validation") 
+    plt.xlabel("Iterations") 
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.savefig('loss_curve.png' + str(r))
+    plt.close()
+    plt.title("Curve:Accuracy") 
+    plt.plot(range(len(train_loss_list)), train_acc_list, label="Train") 
+    plt.plot(range(len(train_loss_list)), val_acc_list, label="Validation") 
+    plt.xlabel("Iterations") 
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.savefig('acc_curve.png' + str(r))
+    return model
 
-  def training_step(self, batch, batch_idx):
-    # --------------------------
-    images, label = batch
-    outputs = self(images)
-    loss = self.criterion(outputs, label)
-    total = label.size(0)
-    _, predicted = torch.max(outputs.data, 1)
-    #print(predicted)
-    correct = (predicted == label).sum().item()
-    accuracy = correct / total * 100
-    self.log('train_loss', loss)
-    self.log('train_accuracy', accuracy)
-    #print("Training: loss:", loss.item(), "accuracy:", accuracy)
-    #return {'loss': loss, 'accuracy': accuracy}
-    return loss
-    # --------------------------
+def test_model(model, testloader, criterion):
+    total_correct = 0
+    total_loss = 0
+    n = 0
+    for images, label in testloader:
+        model.eval()
+        # Run the forward pass
+        images = images.cuda()
+        label = label.cuda()
+        outputs = model(images)
+        loss = criterion(outputs, label)
 
-  def validation_step(self, batch, batch_idx):
-    # --------------------------
-    images, label = batch
-    outputs = self(images)
-    loss = self.criterion(outputs, label)
-    total = label.size(0)
-    _, predicted = torch.max(outputs.data, 1)
-    correct = (predicted == label).sum().item()
-    accuracy = correct / total * 100
-    self.log('val_loss', loss)
-    self.log('val_accuracy', accuracy)
-    print("Validation", "accuracy:", accuracy)
-    #return {'loss': loss, 'accuracy': accuracy}
-    #return loss, accuracy
-
-  def test_step(self, batch, batch_idx):
-    # --------------------------
-    images, label = batch
-    outputs = self(images)
-    loss = self.criterion(outputs, label)
-    total = label.size(0)
-    _, predicted = torch.max(outputs.data, 1)
-    correct = (predicted == label).sum().item()
-    accuracy = correct / total * 100
-    self.log('test_loss', loss)
-    self.log('test_accuracy', accuracy)
-    #print("Validation", "accuracy:", accuracy)
-    #return {'loss': loss, 'accuracy': accuracy}
-    #return loss, accuracy
-    # ---------#-----------------
-
-    def training_epoch_end(self, outs):
-        print("Epoch:", self.ep_num, "Training: loss:", outs[0])
-        self.ep_num += 1
-    #    #print("Training:", outs)
-
-    #def validation_epoch_end(self, outs):
-    #    for out in outs:
-    #        pass
-    #    print("Validation: loss:", outs[0]['loss'].item(), "accuracy:", outs[0]['accuracy'])
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        return optimizer
-
-
-"""---
-## Train
-NOTE: in colab, set progress_bar_refresh_rate high or the screen will freeze because of the rapid tqdm update speed.
-"""
-# if __name__ == '__main__':
-#     # init model
-#     ae = Lulz()
-#     digits = Data()
-#     # Initialize a trainer
-#     trainer = pl.Trainer(progress_bar_refresh_rate=0, gpus=4, max_epochs=200, distributed_backend='ddp', callbacks=[EarlyStopping(monitor='val_loss')])
-#     # Train the model ⚡
-#     trainer.fit(ae, digits)
+            # Track the accuracy
+        total = label.size(0)
+        n += total
+        _, predicted = torch.max(outputs.data, 1)
+        correct = (predicted == label).sum().item()
+        total_correct += correct
+        total_loss += loss.item()
+    
+    accuracy = total_correct / n * 100
+    loss = total_loss / n
+    print("Test: Accuracy:", accuracy, "Loss:", loss)
+    
 
 
 if __name__ == '__main__':
@@ -252,14 +297,14 @@ if __name__ == '__main__':
     valdataset = DigitAdditionDataset(X_test, y_test)
 
     # Training
-
-    ae = Lulz()
-    digits = Data(traindataset, valdataset)
-    # Initialize a trainer
-    trainer = pl.Trainer(progress_bar_refresh_rate=0, gpus=4, max_epochs=100,
-                         distributed_backend='ddp', callbacks=[EarlyStopping(monitor='val_loss')])
-    # Train the model ⚡
-    trainer.fit(ae, train, val)
+    model = Net()
+    model= nn.DataParallel(model)
+    model = model.cuda()
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = train_model(model, trainloader, valoader, 100, criterion=criterion, optimizer=optimizer) 
+    
 
   if sys.argv[1] == 'test':
 
@@ -267,18 +312,22 @@ if __name__ == '__main__':
       print('Syntax:', 'python main.py test <dataset_file> <label_file> <model_checkpoint>')
       sys.exit(1)
 
-    chkpoint = 'best_model.ckpt'
+    chkpoint = 'output/best'
     if len(sys.argv) == 5:
       chkpoint = sys.argv[4]
     dataset_file = sys.argv[2]
     labels_file = sys.argv[3]
-    X = np.load(dataset_file)
-    y = np.load(labels_file)
+    X = np.load(dataset_file)[6000:]
+    y = np.load(labels_file)[6000:]
     X = torch.Tensor([[i] for i in X])
     batch_size = 300
 
     testdataset = DigitAdditionDataset(X, y)
     test = DataLoader(dataset=testdataset, batch_size=batch_size, num_workers=40)
-    model = Lulz.load_from_checkpoint(chkpoint)
-    trainer = pl.Trainer()
-    trainer.test(model, test_dataloaders=test)
+    model = Net()
+    model= nn.DataParallel(model)
+    model = model.cuda()
+    model.load_state_dict(torch.load(chkpoint))
+    # Loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    test_model(model, test, criterion) 

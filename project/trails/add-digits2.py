@@ -11,11 +11,16 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #loading data
 X = np.load('../Data/data0.npy')
 y = np.load('../Data/lab0.npy')
-for i in [1, 2]:
+for i in [1]:
     Xt = np.load('../Data/data' + str(i) + '.npy')
     yt = np.load('../Data/lab' + str(i) + '.npy')
     X = np.concatenate((X, Xt))
     y = np.concatenate((y, yt))
+Xt = np.load('../Data/data2.npy')[:5000]
+yt = np.load('../Data/lab2.npy')[:5000]
+X = np.concatenate((X, Xt))
+y = np.concatenate((y, yt))
+
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print("split done")

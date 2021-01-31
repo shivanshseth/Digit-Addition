@@ -20,13 +20,13 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 X = np.load('../Data/data0.npy')
 y = np.load('../Data/lab0.npy')
-for i in [1, 2]:
+for i in [1]:
     Xt = np.load('../Data/data' + str(i) + '.npy')
     yt = np.load('../Data/lab' + str(i) + '.npy')
     X = np.concatenate((X, Xt))
     y = np.concatenate((y, yt))
-Xt = np.load('../Data/data4.npy')
-yt = np.load('../Data/lab4.npy')
+Xt = np.load('../Data/data2.npy')[:5000]
+yt = np.load('../Data/lab2.npy')[:5000]
 X = np.concatenate((X, Xt))
 y = np.concatenate((y, yt))
 
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     ae = Lulz()
     digits = Data()
     # Initialize a trainer
-    trainer = pl.Trainer(progress_bar_refresh_rate=0, gpus=4, max_epochs=200, distributed_backend='ddp', callbacks=[EarlyStopping(monitor='val_loss')])
+    trainer = pl.Trainer(progress_bar_refresh_rate=0, gpus=4, max_epochs=100, distributed_backend='ddp')
     # Train the model ⚡
     trainer.fit(ae, digits)
 
