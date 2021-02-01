@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import sys
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-r = 3
+r = 1
 #loading data
 #X = np.load('../Data/data0.npy')
 #y = np.load('../Data/lab0.npy')
@@ -22,7 +22,7 @@ r = 3
 #X_train = torch.Tensor([[i] for i in X_train])
 #X_test = np.pad(X_test, pad_width=tp, mode='constant', constant_values=0)
 #X_test = torch.Tensor([[i] for i in X_test])
-batch_size = 300
+batch_size = 500
 
 print("Converted to tensor")
 
@@ -48,54 +48,59 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.layerR1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
             nn.ReLU())
 
         self.layerR2 = nn.Sequential(
-            nn.Conv2d(32, 48, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2),
             nn.ReLU() 
             )
-        #(40, 168) -> (40, 84)
-        self.layerR3 = nn.Sequential(
-            nn.Conv2d(48, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(), 
-            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
-        # (32, 40 , 84) -> (4, 40, 42)
+        self.layerR3 = nn.Sequential(
+            nn.Conv2d(32, 48, kernel_size=5, stride=1, padding=2),
+            nn.ReLU() 
+            )
+
+        # (32, 40 , 168) -> (4, 40, 84)
         self.layerR4 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(48, 64, kernel_size=5, stride=1, padding=2),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
-        # (4, 40, 42) -> (48, 40, 42)
+        # (4, 40, 84) -> (48, 40, 42)
         self.layer1 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU())
+            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
         # (48, 40, 42) -> (128, 22, 22)
         self.layer2 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=(3,2)),
+            nn.Conv2d(64, 128, kernel_size=5, stride=1, padding=2),
+            nn.ReLU())
+        
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=5, stride=1, padding=(4,3)),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
 
         # (128, 22, 22) -> (192, 11, 11)
-        self.layer3 = nn.Sequential(
-            nn.Conv2d(128, 192, kernel_size=3, stride=1, padding=2),
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(128, 192, kernel_size=5, stride=1, padding=2),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         # (192, 11, 11) -> (192, 12, 12)
-        self.layer4 = nn.Sequential(
+        self.layer5 = nn.Sequential(
             nn.Conv2d(192, 192, kernel_size=4, stride=1, padding=2),
             nn.ReLU())
         # (192, 12, 12) -> (128, 6, 6)
-        self.layer5 = nn.Sequential(
+        self.layer6 = nn.Sequential(
             nn.Conv2d(192, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(), 
             nn.MaxPool2d(kernel_size=2, stride=2))
             
 
-        #self.fc1 = nn.Linear(64*6*6, 64*6*6)
-        #self.drop1 = nn.Dropout(p=0.5)
+        self.fc1 = nn.Linear(128*6*6, 128*6*6)
+        self.drop1 = nn.Dropout(p=0.5)
         self.fc2 = nn.Linear(128*6*6, 2000)
         self.drop2 = nn.Dropout(p=0.5)
         self.fc3 = nn.Linear(2000, 37)
@@ -116,11 +121,12 @@ class Net(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         out = self.layer5(out)
+        out = self.layer6(out)
         out = out.reshape(out.size(0), -1)
         #print(out.shape) 
-        #out = F.relu(self.fc1(out))
+        out = F.relu(self.fc1(out))
         #print(out.shape)
-        #out = self.drop1(out)
+        out = self.drop1(out)
         out = F.relu(self.fc2(out))
         out = self.drop2(out)
         out = self.fc3(out)
@@ -202,7 +208,7 @@ def train_model(model, trainloader, valoader, num_epochs, criterion, optimizer, 
         val_acc_list.append(correct / total) 
         val_loss_list.append(loss.item())
         if epoch % 10 == 0:
-            torch.save(model.state_dict(), 'output/model' + str(r) + str(epoch))
+            torch.save(model.state_dict(), 'output/model' + str(r) + '_' + str(epoch))
         print('Validation: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
                       (correct / total) * 100))
@@ -267,10 +273,11 @@ if __name__ == '__main__':
       yt = np.load('../Data/lab1.npy')
       X = np.concatenate((X, Xt))
       y = np.concatenate((y, yt))
-      Xt = np.load('../Data/data4.npy')[:10000]
-      yt = np.load('../Data/lab4.npy')[:10000]
-      X = np.concatenate((X, Xt))
-      y = np.concatenate((y, yt))
+      #Xt = np.load('../Data/data3.npy')
+      #yt = np.load('../Data/lab3.npy')
+      #k = np.random.choice(Xt.shape[0], 100000, replace=False)
+      #X = np.concatenate((X, Xt[k]))
+      #y = np.concatenate((y, yt[k]))
       Xt = np.load('../Data/data2.npy')[:6000]
       yt = np.load('../Data/lab2.npy')[:6000]
       X = np.concatenate((X, Xt))
@@ -284,7 +291,7 @@ if __name__ == '__main__':
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     X_train = torch.Tensor([[i] for i in X_train])
     X_test = torch.Tensor([[i] for i in X_test])
-    batch_size = 300
+    batch_size = 1000
 
     traindataset = DigitAdditionDataset(X_train, y_train)
     valdataset = DigitAdditionDataset(X_test, y_test)
