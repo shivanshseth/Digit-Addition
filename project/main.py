@@ -8,19 +8,10 @@ import torch.nn.functional as F
 import sys
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-r = 1
+r = 3
 #loading data
 #X = np.load('../Data/data0.npy')
 #y = np.load('../Data/lab0.npy')
-#for i in [1, 4]:
-#    Xt = np.load('../Data/data' + str(i) + '.npy')[:10000]
-#    yt = np.load('../Data/lab' + str(i) + '.npy')[:10000]
-#    X = np.concatenate((X, Xt))
-#    y = np.concatenate((y, yt))
-#Xt = np.load('../Data/data2.npy')[:6000]
-#yt = np.load('../Data/lab2.npy')[:6000]
-#X = np.concatenate((X, Xt))
-#y = np.concatenate((y, yt))
 
 
 #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -49,8 +40,6 @@ class DigitAdditionDataset(Dataset):
 
 #traindataset = DigitAdditionDataset(X_train, y_train)
 #valdataset = DigitAdditionDataset(X_test, y_test)
-#valoader = DataLoader(dataset=valdataset, batch_size=batch_size, shuffle=True, num_workers=1)
-#trainloader = DataLoader(dataset=traindataset, batch_size=batch_size, shuffle=True, num_workers=1)
 
 #print("dataloader made")
 
@@ -59,40 +48,39 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.layerR1 = nn.Sequential(
-            nn.Conv2d(1, 48, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU())
 
-        #self.layerR2 = nn.Sequential(
-        #    nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
-        #    nn.ReLU() 
-        #    )
+        self.layerR2 = nn.Sequential(
+            nn.Conv2d(32, 48, kernel_size=3, stride=1, padding=1),
+            nn.ReLU() 
+            )
+        #(40, 168) -> (40, 84)
+        self.layerR3 = nn.Sequential(
+            nn.Conv2d(48, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(), 
+            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
-        #self.layerR3 = nn.Sequential(
-        #    nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-        #    nn.ReLU() 
-        #    )
-
-        # (32, 40 , 168) -> (4, 40, 84)
+        # (32, 40 , 84) -> (4, 40, 42)
         self.layerR4 = nn.Sequential(
-            nn.Conv2d(48, 64, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
 
-        # (4, 40, 84) -> (48, 40, 42)
+        # (4, 40, 42) -> (48, 40, 42)
         self.layer1 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(1,2), stride=(1,2)))
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU())
 
         # (48, 40, 42) -> (128, 22, 22)
         self.layer2 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=5, stride=1, padding=(4,3)),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=(3,2)),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
 
         # (128, 22, 22) -> (192, 11, 11)
         self.layer3 = nn.Sequential(
-            nn.Conv2d(128, 192, kernel_size=5, stride=1, padding=2),
+            nn.Conv2d(128, 192, kernel_size=3, stride=1, padding=2),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         # (192, 11, 11) -> (192, 12, 12)
@@ -120,8 +108,8 @@ class Net(nn.Module):
 
     def forward(self, x):
         out = self.layerR1(x)
-        #out = self.layerR2(out)
-        #out = self.layerR3(out)
+        out = self.layerR2(out)
+        out = self.layerR3(out)
         out = self.layerR4(out)
         out = self.layer1(out)
         out = self.layer2(out)
@@ -213,7 +201,7 @@ def train_model(model, trainloader, valoader, num_epochs, criterion, optimizer, 
             correct = (predicted == label).sum().item()
         val_acc_list.append(correct / total) 
         val_loss_list.append(loss.item())
-        if epoch % 30 == 0:
+        if epoch % 10 == 0:
             torch.save(model.state_dict(), 'output/model' + str(r) + str(epoch))
         print('Validation: Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
@@ -227,7 +215,7 @@ def train_model(model, trainloader, valoader, num_epochs, criterion, optimizer, 
     plt.xlabel("Iterations") 
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig('loss_curve.png' + str(r))
+    plt.savefig('output/' + str(r) + 'loss_curve.png')
     plt.close()
     plt.title("Curve:Accuracy") 
     plt.plot(range(len(train_loss_list)), train_acc_list, label="Train") 
@@ -235,7 +223,7 @@ def train_model(model, trainloader, valoader, num_epochs, criterion, optimizer, 
     plt.xlabel("Iterations") 
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig('acc_curve.png' + str(r))
+    plt.savefig('output/' + str(r) + 'acc_curve.png')
     return model
 
 def test_model(model, testloader, criterion):
@@ -259,7 +247,7 @@ def test_model(model, testloader, criterion):
         total_loss += loss.item()
     
     accuracy = total_correct / n * 100
-    loss = total_loss / n
+    loss = total_loss / len(testloader)
     print("Test: Accuracy:", accuracy, "Loss:", loss)
     
 
@@ -273,15 +261,20 @@ if __name__ == '__main__':
     # Loading Data
 
     if len(sys.argv) < 4:
-      train_data_dir = '../Data'
-      X = np.load(train_data_dir + '/data0.npy')
-      y = np.load(train_data_dir + '/lab0.npy')
-      for i in [1, 2]:
-        Xt = np.load(train_data_dir + '/data' + str(i) + '.npy')
-        yt = np.load(train_data_dir + '/lab' + str(i) + '.npy')
-        X = np.concatenate((X, Xt))
-        y = np.concatenate((y, yt))
-
+      X = np.load('../Data/data0.npy')
+      y = np.load('../Data/lab0.npy') 
+      Xt = np.load('../Data/data1.npy')
+      yt = np.load('../Data/lab1.npy')
+      X = np.concatenate((X, Xt))
+      y = np.concatenate((y, yt))
+      Xt = np.load('../Data/data4.npy')[:10000]
+      yt = np.load('../Data/lab4.npy')[:10000]
+      X = np.concatenate((X, Xt))
+      y = np.concatenate((y, yt))
+      Xt = np.load('../Data/data2.npy')[:6000]
+      yt = np.load('../Data/lab2.npy')[:6000]
+      X = np.concatenate((X, Xt))
+      y = np.concatenate((y, yt))
     else:
       dataset_file = sys.argv[2]
       labels_file = sys.argv[3]
@@ -295,7 +288,10 @@ if __name__ == '__main__':
 
     traindataset = DigitAdditionDataset(X_train, y_train)
     valdataset = DigitAdditionDataset(X_test, y_test)
-
+    
+    valoader = DataLoader(dataset=valdataset, batch_size=batch_size, shuffle=True, num_workers=1)
+    trainloader = DataLoader(dataset=traindataset, batch_size=batch_size,  num_workers=1)
+    
     # Training
     model = Net()
     model= nn.DataParallel(model)
