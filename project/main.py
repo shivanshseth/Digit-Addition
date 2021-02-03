@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import sys
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-r = 1
+r = 4
 #loading data
 #X = np.load('../Data/data0.npy')
 #y = np.load('../Data/lab0.npy')
@@ -273,11 +273,11 @@ if __name__ == '__main__':
       yt = np.load('../Data/lab1.npy')
       X = np.concatenate((X, Xt))
       y = np.concatenate((y, yt))
-      #Xt = np.load('../Data/data3.npy')
-      #yt = np.load('../Data/lab3.npy')
-      #k = np.random.choice(Xt.shape[0], 100000, replace=False)
-      #X = np.concatenate((X, Xt[k]))
-      #y = np.concatenate((y, yt[k]))
+      Xt = np.load('../Data/data3.npy')
+      yt = np.load('../Data/lab3.npy')
+      k = np.random.choice(Xt.shape[0], 100000, replace=False)
+      X = np.concatenate((X, Xt[k]))
+      y = np.concatenate((y, yt[k]))
       Xt = np.load('../Data/data2.npy')[:6000]
       yt = np.load('../Data/lab2.npy')[:6000]
       X = np.concatenate((X, Xt))
@@ -291,7 +291,7 @@ if __name__ == '__main__':
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     X_train = torch.Tensor([[i] for i in X_train])
     X_test = torch.Tensor([[i] for i in X_test])
-    batch_size = 1000
+    batch_size = 800
 
     traindataset = DigitAdditionDataset(X_train, y_train)
     valdataset = DigitAdditionDataset(X_test, y_test)
