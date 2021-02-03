@@ -3,7 +3,14 @@ The goal of to successfully predict the sum of digits from an image with 4 handw
 
 ## Description   
 
-#### Architecture
+#### Datasets
+An additional dataset of 50000 data points was created by combining individual images from the MNIST Dataset. This dataset was used for training the model.
+
+#### Models
+
+Two different models have been trained on the dataset, one CNN from scratch and a pretrained "Resnet18" model finetuned on the dataset.
+
+#### 1. CNN trained from scratch 
 
 | Num | Name     | Type             | Params | 
 ------|----------|------------------|--------|
@@ -25,23 +32,52 @@ The goal of to successfully predict the sum of digits from an image with 4 handw
 0         Non-trainable params
 32.3 M    Total params
 
-#### Additional Datasets
+##### Metrics
 
-An additional dataset of 100000 data points was created by combining individual images from the MNIST Dataset. This dataset was used for training the model.
+| Dataset | Accuracy | loss |
+----------|----------|------|
+| Training | 93.50%    | 0.1957|
+| Validation | 94.00%  | 0.2135|
+| Test       | 70.675% |  1.08 |
+
+The difference in Validation and Test accuracy can be attributed to the difference in datasets used.
+
+#### 2. Fine-tuned Resnet 18
+
+#### Metrics 
+
+| Dataset | Accuracy | loss |
+----------|----------|------|
+| Training | 100%    | 0.1957|
+| Validation | 94.23%  | 0.453|
+| Test       | 95.55%% |  0.394 |
+
+The fine-tuned resnet model clearly out performs model 1. Even though the test set is somewhat different from the training and validation datasets, it generalises well enough.
 
 ## How to run   
-First, install dependencies   
+First, install dependencies
+
+```   
 pip -r requirements.txt
-```bash
 # clone project   
 git clone https://github.com/shivanshseth/Digit-Addition
 
 # module folder
 cd project
+```
 
+#### Running model - 1
+```
 # run module  
 python main.py train [data_file] [labels_file]
 ```
+
+#### Runnning model - 2 (fine-tuned resnet) 
+```
+# run module  
+python main_resnet.py train [data_file] [labels_file]
+```
+
 
 Note: In absence of "data_file" and "data_label" arguments, the model will use files "../Data/data[1-2-3].npy" and "../Data/lab[1-2-3].npy". Assumptions are made about the size of these datasets so its better to provide data set explicitly.
 
