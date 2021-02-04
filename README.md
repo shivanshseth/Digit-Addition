@@ -1,5 +1,5 @@
 #### Goals  
-The goal of this model is to predict the sum of digits from an image with 4 handwritten digits.  
+The goal of this model is to predict the sum of 4 handwritten digits from an 40x168 px image.
 
 ## Description   
 
