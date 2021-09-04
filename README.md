@@ -4,7 +4,7 @@ The goal of this model is to predict the sum of 4 handwritten digits from an 40x
 ## Description   
 
 #### Datasets
-A dataset containing 30000 images and their correspoding labels was provided for the assignment. An additional dataset of 50000 data points was created by combining individual images from the MNIST Dataset. This dataset was used for training the model.
+A dataset containing 30000 images and their corresponding labels was provided for the assignment. An additional dataset of 50000 data points was created by combining individual images from the MNIST Dataset. This dataset was used for training the model.
 
 #### Models
 
